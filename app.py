@@ -1,5 +1,7 @@
-from flask import Flask, jsonify, render_template, request, redirect
+from flask import Flask, jsonify, render_template, request, redirect,Response
 import mysql.connector
+import io
+import matplotlib.pyplot as plt
 from datetime import datetime
 
 app = Flask(__name__)
@@ -13,6 +15,15 @@ conn = mysql.connector.connect(
 )
 # Use dictionary=False to get tuples (row[0], …)
 cursor = conn.cursor(dictionary=False)
+
+
+def get_expense_data():
+    cursor.execute("SELECT category, SUM(amount ) FROM expenses GROUP BY caregory")
+    rows=cursor.fetchall()
+    categories = [r[0] for r in rows]
+    totals= [float(r[1]) for r in rows]
+    return categories,totals
+
 
 # ---------- Routes ----------
 @app.route("/add", methods=["POST"])
@@ -58,6 +69,28 @@ def delete_expense():
 
     # Always return pure JSON
     return jsonify(success=True, total=float(total))
+
+
+@app.route("/chart")
+def chart():
+    cursor.execute("SELECT category, SUM(amount) FROM expenses GROUP BY category")
+    data = cursor.fetchall()
+
+    categories = [row[0] for row in data]
+    totals = [row[1] for row in data]
+
+    plt.figure(figsize=(5,5))
+    plt.pie(totals, labels=categories, autopct='%1.1f%%', startangle=140)
+    plt.title('Expense Breakdown by Category')
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+
+    return Response(buf.getvalue(), mimetype='image/png')
+
+
 
 
 if __name__ == "__main__":
